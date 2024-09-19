@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="styles.css" type="text/css">
+    <title>GitHub Streaker</title>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Enhanced GitHub Streak Creator</h1>
+            <label class="switch">
+                <input type="checkbox" id="darkModeToggle">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="controls">
+            <button id="prevYearBtn">Previous Year</button>
+            <button id="nextYearBtn">Next Year</button>
+            <button id="resetBtn">Reset Grid</button>
+            <button id="randomizeBtn">Randomize</button>
+            <button id="syncGitHubBtn">Sync with GitHub</button>
+            <button id="shareBtn">Share</button>
+        </div>
+        <div id="colorPalette"></div>
+        <div id="goalSetting">
+            <h3>Set Contribution Goal</h3>
+            <input type="number" id="goalInput" placeholder="Enter your contribution goal">
+            <div id="progressBar">
+                <div id="progress"></div>
+            </div>
+        </div>
+        <div class="grid-container">
+            <div class="days">
+                <span>Mon</span>
+                <span>Wed</span>
+                <span>Fri</span>
+            </div>
+            <div>
+                <div class="months" id="months"></div>
+                <div class="grid" id="grid"></div>
+            </div>
+        </div>
+        <div class="legend">
+            <span>Less</span>
+            <div class="legend-item" data-level="0"></div>
+            <div class="legend-item" data-level="1"></div>
+            <div class="legend-item" data-level="2"></div>
+            <div class="legend-item" data-level="3"></div>
+            <div class="legend-item" data-level="4"></div>
+            <span>More</span>
+        </div>
+        <div id="statsContainer"></div>
+        <h2>Todo List</h2>
+        <div class="todo-list" id="todoList"></div>
+        <div id="shareContainer">
+            <h3>Share Your Streak</h3>
+            <input type="text" id="shareUrl" readonly>
+        </div>
+    </div>
+    <div class="tooltip" id="tooltip"></div>
+	 <script src="script.js"></script>
+</body>
+</html>
