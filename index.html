@@ -3,33 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<link rel="stylesheet" href="styles.css" type="text/css">
-    <title>GitHub Streaker</title>
+    <title>GitHub Streak Creator</title>
+    <script src="https://code.iconify.design/2/2.1.0/iconify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+     <!-- <link rel="stylesheet" href="styles.css" type="text/style"> -->
+	 
 </head>
 <body>
+    <header class="header">
+        <h1>GitHub Streak Creator</h1>
+    </header>
+    <section class="hero">
+        <div class="hero-shapes">
+            <div class="hero-shape hero-shape-1"></div>
+            <div class="hero-shape hero-shape-2"></div>
+            <div class="hero-shape hero-shape-3"></div>
+        </div>
+        <h1>Bring Your Contributions to Life</h1>
+        <p>Design, visualize, and share your ideal GitHub contribution graph. Perfect for planning your coding journey or just for fun!</p>
+        <a href="#" class="hero-cta">Get Started</a>
+    </section>
     <div class="container">
-        <div class="header">
-            <h1>Enhanced GitHub Streak Creator</h1>
+        <div class="controls">
+            <button id="prevYearBtn"><span class="iconify" data-icon="mdi:chevron-left"></span>Previous Year</button>
+            <button id="nextYearBtn">Next Year<span class="iconify" data-icon="mdi:chevron-right"></span></button>
+            <button id="resetBtn"><span class="iconify" data-icon="mdi:refresh"></span>Reset Grid</button>
+            <button id="randomizeBtn"><span class="iconify" data-icon="mdi:shuffle"></span>Randomize</button>
+            <button id="syncGitHubBtn"><span class="iconify" data-icon="mdi:github"></span>Sync with GitHub</button>
+            <button id="shareBtn"><span class="iconify" data-icon="mdi:share"></span>Share</button>
+            <button id="printBtn"><span class="iconify" data-icon="mdi:printer"></span>Print Todo List</button>
+            <button id="saveBtn"><span class="iconify"
+
+ data-icon="mdi:content-save"></span>Save</button>
+            <button id="loadBtn"><span class="iconify" data-icon="mdi:folder-open"></span>Load</button>
+            <button id="reminderBtn"><span class="iconify" data-icon="mdi:bell"></span>Set Reminder</button>
             <label class="switch">
                 <input type="checkbox" id="darkModeToggle">
                 <span class="slider"></span>
             </label>
         </div>
-        <div class="controls">
-            <button id="prevYearBtn">Previous Year</button>
-            <button id="nextYearBtn">Next Year</button>
-            <button id="resetBtn">Reset Grid</button>
-            <button id="randomizeBtn">Randomize</button>
-            <button id="syncGitHubBtn">Sync with GitHub</button>
-            <button id="shareBtn">Share</button>
-        </div>
         <div id="colorPalette"></div>
-        <div id="goalSetting">
-            <h3>Set Contribution Goal</h3>
-            <input type="number" id="goalInput" placeholder="Enter your contribution goal">
-            <div id="progressBar">
-                <div id="progress"></div>
-            </div>
+        <input type="text" id="textInput" placeholder="Enter text to display on the grid (max 10 characters)" maxlength="10">
+        <div id="viewToggle">
+            <button id="gridViewBtn">Grid View</button>
+            <button id="heatmapViewBtn" disabled style="cursor: not-allowed;" title="Coming Soon!">Heatmap View</button>
+        </div>
+        <div id="timelapse">
+            <div id="timelapseHandle"></div>
         </div>
         <div class="grid-container">
             <div class="days">
@@ -42,6 +62,7 @@
                 <div class="grid" id="grid"></div>
             </div>
         </div>
+        <div id="heatmap" style="display: none;"></div>
         <div class="legend">
             <span>Less</span>
             <div class="legend-item" data-level="0"></div>
@@ -52,14 +73,32 @@
             <span>More</span>
         </div>
         <div id="statsContainer"></div>
+        <div id="achievementsContainer"></div>
         <h2>Todo List</h2>
         <div class="todo-list" id="todoList"></div>
-        <div id="shareContainer">
+    </div>
+    <div class="tooltip" id="tooltip"></div>
+    <div class="popup" id="sharePopup">
+        <div class="popup-content">
+            <span class="close-popup">&times;</span>
             <h3>Share Your Streak</h3>
             <input type="text" id="shareUrl" readonly>
         </div>
     </div>
-    <div class="tooltip" id="tooltip"></div>
-	 <script src="script.js"></script>
+    <div class="popup" id="reminderPopup">
+        <div class="popup-content">
+            <span class="close-popup">&times;</span>
+            <h3>Set Reminder</h3>
+            <input type="date" id="reminderDate">
+            <input type="text" id="reminderText" placeholder="Reminder text">
+            <button id="addReminderBtn">Add Reminder</button>
+        </div>
+    </div>
+    <div id="remindersContainer"></div>
+
+    
+
+
+		
 </body>
 </html>

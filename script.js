@@ -15,10 +15,13 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
         let startDate = new Date();
         startDate.setDate(startDate.getDate() - startDate.getDay() + 1); // Start from Monday
         let todoList = new Map();
-        let colorPalette = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'];
+        let colorPalette = ['#cccccc', '#9be9a8', '#40c463', '#30a14e', '#216e39'];
         let darkColorPalette = ['#161b22', '#0e4429', '#006d32', '#26a641', '#39d353'];
-        let contributionGoal = 0;
         let totalContributions = 0;
+        let longestStreak = 0;
+        let currentStreak = 0;
+        let heatmapChart = null;
+        let reminders = [];
 
         const gridElement = document.getElementById('grid');
         const monthsElement = document.getElementById('months');
@@ -30,18 +33,59 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
         const randomizeBtn = document.getElementById('randomizeBtn');
         const syncGitHubBtn = document.getElementById('syncGitHubBtn');
         const shareBtn = document.getElementById('shareBtn');
+        const printBtn = document.getElementById('printBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const loadBtn = document.getElementById('loadBtn');
+        const reminderBtn = document.getElementById('reminderBtn');
         const tooltip = document.getElementById('tooltip');
         const statsContainer = document.getElementById('statsContainer');
         const colorPaletteContainer = document.getElementById('colorPalette');
-        const goalInput = document.getElementById('goalInput');
-        const progressBar = document.getElementById('progress');
         const shareUrlInput = document.getElementById('shareUrl');
+        const textInput = document.getElementById('textInput');
+        const achievementsContainer = document.getElementById('achievementsContainer');
+        const gridViewBtn = document.getElementById('gridViewBtn');
+        const heatmapViewBtn = document.getElementById('heatmapViewBtn');
+        const heatmapContainer = document.getElementById('heatmap');
+        const sharePopup = document.getElementById('sharePopup');
+        const reminderPopup = document.getElementById('reminderPopup');
+        const addReminderBtn = document.getElementById('addReminderBtn');
+        const remindersContainer = document.getElementById('remindersContainer');
+        const timelapse = document.getElementById('timelapse');
+        const timelapseHandle = document.getElementById('timelapseHandle');
+
+        const achievements = [
+            { name: 'First Contribution', description: 'Make your first contribution', icon: 'mdi:star-outline', condition: () => totalContributions > 0 },
+            { name: 'Consistent Contributor', description: 'Contribute for 7 days in a row', icon: 'mdi:calendar-check', condition: () => longestStreak >= 7 },
+            { name: 'Coding Machine', description: 'Make 100 contributions', icon: 'mdi:robot', condition: () => totalContributions >= 100 },
+            { name: 'Open Source Hero', description: 'Reach a 30-day streak', icon: 'mdi:trophy', condition: () => longestStreak >= 30 },
+            { name: 'Contribution Master', description: 'Make 1000 contributions', icon: 'mdi:crown', condition: () => totalContributions >= 1000 },
+        ];
+
+        const patterns = {
+            heart: [
+                [0,1,1,0,1,1,0],
+                [1,1,1,1,1,1,1],
+                [1,1,1,1,1,1,1],
+                [0,1,1,1,1,1,0],
+                [0,0,1,1,1,0,0],
+                [0,0,0,1,0,0,0]
+            ],
+            star: [
+                [0,0,0,1,0,0,0],
+                [0,0,1,1,1,0,0],
+                [1,1,1,1,1,1,1],
+                [0,1,1,1,1,1,0],
+                [0,0,1,0,1,0,0],
+                [0,1,0,0,0,1,0]
+            ]
+        };
 
         function initializeGrid() {
             grid = Array(7).fill().map(() => Array(53).fill(0));
             renderGrid();
             renderMonths();
             updateStats();
+            renderAchievements();
         }
 
         function renderGrid() {
@@ -51,7 +95,7 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
                     const cellElement = document.createElement('div');
                     cellElement.className = 'cell';
                     cellElement.style.backgroundColor = getColor(cell);
-                    cellElement.addEventListener('mousedown', () => handleMouseDown(i, j));
+                    cellElement.addEventListener('mousedown', (e) => handleMouseDown(e, i, j));
                     cellElement.addEventListener('mouseenter', (e) => handleMouseEnter(e, i, j));
                     cellElement.addEventListener('mousemove', (e) => showTooltip(e, i, j));
                     cellElement.addEventListener('mouseleave', hideTooltip);
@@ -73,9 +117,13 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
             }
         }
 
-        function handleMouseDown(row, col) {
-            isDrawing = true;
-            updateGrid(row, col);
+        function handleMouseDown(event, row, col) {
+            if (event.ctrlKey) {
+                updateGrid(row, col, 0);
+            } else {
+                isDrawing = true;
+                updateGrid(row, col);
+            }
         }
 
         function handleMouseEnter(event, row, col) {
@@ -84,13 +132,17 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
             }
         }
 
-        function updateGrid(row, col) {
+        function updateGrid(row, col, forcedLevel = null) {
             const oldLevel = grid[row][col];
-            const newLevel = (oldLevel + 1) % LEVELS;
+            const newLevel = forcedLevel !== null ? forcedLevel : (oldLevel + 1) % LEVELS;
             grid[row][col] = newLevel;
             animateCell(row, col, oldLevel, newLevel);
             updateTodoList(row, col, oldLevel, newLevel);
             updateStats();
+            renderAchievements();
+            if (heatmapChart) {
+                updateHeatmap();
+            }
         }
 
         function animateCell(row, col, oldLevel, newLevel) {
@@ -158,8 +210,8 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
 
         function updateStats() {
             totalContributions = grid.flat().reduce((sum, cell) => sum + cell, 0);
-            const longestStreak = calculateLongestStreak();
-            const currentStreak = calculateCurrentStreak();
+            longestStreak = calculateLongestStreak();
+            currentStreak = calculateCurrentStreak();
 
             statsContainer.innerHTML = `
                 <div class="stat">
@@ -175,8 +227,6 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
                     <div>Current Streak</div>
                 </div>
             `;
-
-            updateProgressBar();
         }
 
         function calculateLongestStreak() {
@@ -207,13 +257,6 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
             return currentStreak;
         }
 
-        function updateProgressBar() {
-            if (contributionGoal > 0) {
-                const progress = Math.min((totalContributions / contributionGoal) * 100, 100);
-                progressBar.style.width = `${progress}%`;
-            }
-        }
-
         function renderColorPalette() {
             colorPaletteContainer.innerHTML = '';
             const currentPalette = darkMode ? darkColorPalette : colorPalette;
@@ -234,7 +277,862 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
             }
             renderGrid();
             renderColorPalette();
+            if (heatmapChart) {
+                updateHeatmap();
+            }
         }
+
+        function renderAchievements() {
+            achievementsContainer.innerHTML = '';
+            achievements.forEach(achievement => {
+                const achievementElement = document.createElement('div');
+                achievementElement.className = `achievement ${achievement.condition() ? '' : 'achievement-locked'}`;
+                achievementElement.innerHTML = `
+                    <span class="iconify" data-icon="${achievement.icon}"></span>
+                    <p>${achievement.name}</p>
+                `;
+                achievementElement.title = achievement.description;
+                achievementsContainer.appendChild(achievementElement);
+            });
+        }
+
+        function updateHeatmap() {
+            const data = grid.flat();
+            heatmapChart.data.datasets[0].data = data.map((value, index) => ({
+                x: index % 53,
+                y: Math.floor(index / 53),
+                v: value
+            }));
+            heatmapChart.update();
+        }
+
+        function createHeatmap() {
+            const ctx = document.getElementById('heatmap').getContext('2d');
+            const data = grid.flat();
+            heatmapChart = new Chart(ctx, {
+                type: 'heatmap',
+                data: {
+                    datasets: [{
+                        data: data.map((value, index) => ({
+                            x: index % 53,
+                            y: Math.floor(index / 53),
+                            v: value
+                        })),
+                    }]
+                },
+                options: {
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            min: 0,
+                            max: 52,
+                            ticks: {
+                                stepSize: 1,
+                                callback: function(value, index, values) {
+                                    return index % 4 === 0 ? MONTHS[Math.floor(index / 4)] : '';
+                                }
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            min: 0,
+                            max: 6,
+                            ticks: {
+                                stepSize: 1,
+                                callback: function(value, index, values) {
+                                    return DAYS[Math.floor(index / 2)];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateTextOnGrid() {
+            const text = textInput.value.toUpperCase();
+            const textGrid = textToPixels(text);
+            
+            // Clear the grid
+            grid = grid.map(row => row.map(() => 0));
+            
+            // Place the text grid in the center of the main grid
+            const startRow = Math.floor((7 - textGrid.length) / 2);
+            const startCol = Math.floor((53 - textGrid[0].length) / 2);
+            
+            textGrid.forEach((row, i) => {
+                row.forEach((cell, j) => {
+                    if (startRow + i < 7 && startCol + j < 53) {
+                        grid[startRow + i][startCol + j] = cell ? 4 : 0; // Use maximum level for text pixels
+                    }
+                });
+            });
+            
+            renderGrid();
+            updateStats();
+            renderAchievements();
+            if (heatmapChart) {
+                updateHeatmap();
+            }
+        }
+
+        function textToPixels(text) {
+            const charWidth = 5;
+            const charHeight = 7;
+            const spacing = 1;
+            
+            const pixels = [];
+            for (let i = 0; i < charHeight; i++) {
+                pixels.push(new Array(text.length * (charWidth + spacing)).fill(0));
+            }
+            
+            text.split('').forEach((char, charIndex) => {
+                const charPixels = getCharPixels(char);
+                for (let i = 0; i < charHeight; i++) {
+                    for (let j = 0; j < charWidth; j++) {
+                        if (charPixels[i][j]) {
+                            pixels[i][charIndex * (charWidth + spacing) + j] = 1;
+                        }
+                    }
+                }
+            });
+            
+            return pixels;
+        }
+
+        function getCharPixels(char) {
+            const charPatterns = {
+                'A': [
+        [0,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,1,1,1,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1]
+    ],
+    'B': [
+        [1,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,1,1,1,0]
+    ],
+    'C': [
+        [0,1,1,1,1],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [0,1,1,1,1]
+    ],
+    'D': [
+        [1,1,1,0,0],
+        [1,0,0,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,1,0],
+        [1,1,1,0,0]
+    ],
+    'E': [
+        [1,1,1,1,1],
+        [1,0,0,0,0],
+        [1,1,1,1,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,1,1,1,1]
+    ],
+    'F': [
+        [1,1,1,1,1],
+        [1,0,0,0,0],
+        [1,1,1,1,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0]
+    ],
+    'G': [
+        [0,1,1,1,1],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,1,1,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [0,1,1,1,1]
+    ],
+    'H': [
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,1,1,1,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1]
+    ],
+    'I': [
+        [1,1,1,1,1],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [1,1,1,1,1]
+    ],
+    'J': [
+        [0,0,0,1,1],
+        [0,0,0,0,1],
+        [0,0,0,0,1],
+        [0,0,0,0,1],
+        [0,0,0,0,1],
+        [1,0,0,0,1],
+        [0,1,1,1,0]
+    ],
+    'K': [
+        [1,0,0,0,1],
+        [1,0,0,1,0],
+        [1,0,1,0,0],
+        [1,1,0,0,0],
+        [1,0,1,0,0],
+        [1,0,0,1,0],
+        [1,0,0,0,1]
+    ],
+    'L': [
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,1,1,1,1]
+    ],
+    'M': [
+        [1,0,0,0,1],
+        [1,1,0,1,1],
+        [1,0,1,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1]
+    ],
+    'N': [
+        [1,0,0,0,1],
+        [1,1,0,0,1],
+        [1,0,1,0,1],
+        [1,0,0,1,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1]
+    ],
+    'O': [
+        [0,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [0,1,1,1,0]
+    ],
+    'P': [
+        [1,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,1,1,1,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0]
+    ],
+    'Q': [
+        [0,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,1,0,1],
+        [1,0,0,1,0],
+        [0,1,1,0,1]
+    ],
+    'R': [
+        [1,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,1,1,1,0],
+        [1,0,1,0,0],
+        [1,0,0,1,0],
+        [1,0,0,0,1]
+    ],
+    'S': [
+        [0,1,1,1,1],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [0,1,1,1,0],
+        [0,0,0,0,1],
+        [0,0,0,0,1],
+        [1,1,1,1,0]
+    ],
+    'T': [
+        [1,1,1,1,1],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0]
+    ],
+    'U': [
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [0,1,1,1,0]
+    ],
+    'V': [
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [0,1,0,1,0],
+        [0,0,1,0,0]
+    ],
+    'W': [
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,1,0,1],
+        [1,0,1,0,1],
+        [1,1,0,1,1],
+        [1,0,0,0,1]
+    ],
+    'X': [
+        [1,0,0,0,1],
+        [0,1,0,1,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,1,0,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1]
+    ],
+    'Y': [
+        [1,0,0,0,1],
+        [0,1,0,1,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0]
+    ],
+    'Z': [
+        [1,1,1,1,1],
+        [0,0,0,0,1],
+        [0,0,0,1,0],
+        [0,0,1,0,0],
+        [0,1,0,0,0],
+        [1,0,0,0,0],
+        [1,1,1,1,1]
+    ],
+    '0': [
+        [0,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,1,0,1],
+        [1,0,1,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [0,1,1,1,0]
+    ],
+    '1': [
+        [0,0,1,0,0],
+        [0,1,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,1,1,1,0]
+    ],
+    '2': [
+        [1,1,1,1,0],
+        [0,0,0,0,1],
+        [0,0,0,0,1],
+        [0,1,1,1,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,1,1,1,1]
+    ],
+    '3': [
+        [1,1,1,1,0],
+        [0,0,0,0,1],
+        [0,0,0,0,1],
+        [0,1,1,1,0],
+        [0,0,0,0,1],
+        [0,0,0,0,1],
+        [1,1,1,1,0]
+    ],
+    '4': [
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [1,1,1,1,1],
+        [0,0,0,0,1],
+        [0,0,0,0,1],
+        [0,0,0,0,1]
+    ],
+    '5': [
+        [1,1,1,1,1],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,1,1,1,0],
+        [0,0,0,0,1],
+        [0,0,0,0,1],
+        [1,1,1,1,0]
+    ],
+    '6': [
+        [0,1,1,1,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [0,1,1,1,0]
+    ],
+    '7': [
+        [1,1,1,1,1],
+        [0,0,0,0,1],
+        [0,0,0,1,0],
+        [0,0,0,1,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,1,0,0]
+    ],
+    '8': [
+        [0,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [0,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [0,1,1,1,0]
+    ],
+    '9': [
+        [0,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,0,0,1],
+        [0,1,1,1,1],
+        [0,0,0,0,1],
+        [0,0,0,0,1],
+        [0,1,1,1,0]
+    ],
+     '!': [
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,0,0],
+        [0,1,0],
+        [0,0,0]
+    ],
+    '@': [
+        [0,1,1,1,0],
+        [1,0,0,0,1],
+        [1,0,1,1,1],
+        [1,0,1,0,0],
+        [1,0,1,1,1],
+        [1,0,0,0,0],
+        [0,1,1,1,1]
+    ],
+    '#': [
+        [0,1,0,1,0],
+        [1,1,1,1,1],
+        [0,1,0,1,0],
+        [1,1,1,1,1],
+        [0,1,0,1,0],
+        [0,1,0,1,0],
+        [0,0,0,0,0]
+    ],
+    '$': [
+        [0,0,1,0,0],
+        [0,1,1,1,1],
+        [1,0,1,0,0],
+        [0,1,1,1,0],
+        [0,0,1,0,1],
+        [1,1,1,1,0],
+        [0,0,1,0,0]
+    ],
+    '%': [
+        [1,0,0,0,1],
+        [0,0,0,1,0],
+        [0,0,1,0,0],
+        [0,1,0,0,0],
+        [0,0,1,0,0],
+        [0,1,0,0,0],
+        [1,0,0,0,1]
+    ],
+    '^': [
+        [0,0,1,0,0],
+        [0,1,0,1,0],
+        [1,0,0,0,1],
+        [0,0,0,0,0],
+        [0,0,0,0,0],
+        [0,0,0,0,0],
+        [0,0,0,0,0]
+    ],
+    '&': [
+        [0,1,1,0,0],
+        [1,0,0,1,0],
+        [0,1,1,0,0],
+        [1,0,1,0,1],
+        [1,0,0,1,1],
+        [1,0,0,0,1],
+        [0,1,1,1,0]
+    ],
+    '*': [
+        [0,1,0],
+        [1,1,1],
+        [0,1,0],
+        [1,1,1],
+        [0,1,0],
+        [0,0,0],
+        [0,0,0]
+    ],
+    '(': [
+        [0,0,1,0],
+        [0,1,0,0],
+        [1,0,0,0],
+        [1,0,0,0],
+        [1,0,0,0],
+        [0,1,0,0],
+        [0,0,1,0]
+    ],
+    ')': [
+        [1,0,0,0],
+        [0,1,0,0],
+        [0,0,1,0],
+        [0,0,1,0],
+        [0,0,1,0],
+        [0,1,0,0],
+        [1,0,0,0]
+    ],
+    '_': [
+        [0,0,0,0],
+        [0,0,0,0],
+        [0,0,0,0],
+        [0,0,0,0],
+        [0,0,0,0],
+        [1,1,1,1],
+        [0,0,0,0]
+    ],
+    '-': [
+        [0,0,0,0],
+        [0,0,0,0],
+        [0,0,0,0],
+        [1,1,1,1],
+        [0,0,0,0],
+        [0,0,0,0],
+        [0,0,0,0]
+    ],
+    '=': [
+        [0,0,0,0],
+        [0,0,0,0],
+        [1,1,1,1],
+        [0,0,0,0],
+        [1,1,1,1],
+        [0,0,0,0],
+        [0,0,0,0]
+    ],
+    
+    '+': [
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [1,1,1,1,1],
+        [0,0,1,0,0],
+        [0,0,1,0,0],
+        [0,0,0,0,0],
+        [0,0,0,0,0]
+    ],
+    '<': [
+        [0,0,0,1,0],
+        [0,0,1,0,0],
+        [0,1,0,0,0],
+        [1,0,0,0,0],
+        [0,1,0,0,0],
+        [0,0,1,0,0],
+        [0,0,0,1,0]
+    ],
+    '>': [
+        [1,0,0,0,0],
+        [0,1,0,0,0],
+        [0,0,1,0,0],
+        [0,0,0,1,0],
+        [0,0,1,0,0],
+        [0,1,0,0,0],
+        [1,0,0,0,0]
+    ],
+    ',': [
+        [0,0,0],
+        [0,0,0],
+        [0,0,0],
+        [0,0,0],
+        [0,1,0],
+        [0,1,0],
+        [1,0,0]
+    ],
+    '.': [
+        [0,0,0],
+        [0,0,0],
+        [0,0,0],
+        [0,0,0],
+        [0,0,0],
+        [1,1,0],
+        [1,1,0]
+    ],
+    '?': [
+        [0,1,1,0],
+        [1,0,0,1],
+        [0,0,0,1],
+        [0,0,1,0],
+        [0,0,1,0],
+        [0,0,0,0],
+        [0,0,1,0]
+    ],
+    '/': [
+        [0,0,0,0,1],
+        [0,0,0,1,0],
+        [0,0,1,0,0],
+        [0,1,0,0,0],
+        [1,0,0,0,0],
+        [0,0,0,0,0],
+        [0,0,0,0,0]
+    ],
+    ':': [
+        [0,0,0],
+        [1,1,0],
+        [1,1,0],
+        [0,0,0],
+        [1,1,0],
+        [1,1,0],
+        [0,0,0]
+    ],
+    ';': [
+        [0,0,0],
+        [1,1,0],
+        [1,1,0],
+        [0,0,0],
+        [0,1,0],
+        [0,1,0],
+        [1,0,0]
+    ],
+    '"': [
+        [1,1,0,1,1],
+        [1,1,0,1,1],
+        [0,0,0,0,0],
+        [0,0,0,0,0],
+        [0,0,0,0,0],
+        [0,0,0,0,0],
+        [0,0,0,0,0]
+    ],
+    "'": [
+        [1,0],
+        [1,0],
+        [0,0],
+        [0,0],
+        [0,0],
+        [0,0],
+        [0,0]
+    ],
+    '{': [
+        [0,0,1],
+        [0,1,0],
+        [0,1,0],
+        [1,0,0],
+        [0,1,0],
+        [0,1,0],
+        [0,0,1]
+    ],
+    '}': [
+        [1,0,0],
+        [0,1,0],
+        [0,1,0],
+        [0,0,1],
+        [0,1,0],
+        [0,1,0],
+        [1,0,0]
+    ],
+    '[': [
+        [0,1,1],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,1]
+    ],
+     ']': [
+        [1,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [1,1,0]
+    ],
+    '\\': [
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0],
+        [1,0,0,0,0]
+    ],
+    '|': [
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0],
+        [0,1,0]
+    ],
+    '~': [
+        [0,0,0,0,0,0],
+        [0,0,0,0,0,0],
+        [0,1,0,1,0,1],
+        [1,0,1,0,1,0],
+        [0,0,0,0,0,0],
+        [0,0,0,0,0,0],
+        [0,0,0,0,0,0]
+    ],
+    '`': [
+        [1,0],
+        [0,1],
+        [0,0],
+        [0,0],
+        [0,0],
+        [0,0],
+        [0,0]
+    ],
+                // Add more characters as needed
+            };
+            return charPatterns[char] || charPatterns['A']; // Default to 'A' if character is not found
+        }
+
+        function saveToLocalStorage() {
+            const data = {
+                grid: grid,
+                startDate: startDate.toISOString(),
+                todoList: Array.from(todoList.entries()),
+                colorPalette: colorPalette,
+                darkColorPalette: darkColorPalette
+            };
+            localStorage.setItem('githubStreakCreator', JSON.stringify(data));
+            alert('Data saved successfully!');
+        }
+
+        function loadFromLocalStorage() {
+            const savedData = localStorage.getItem('githubStreakCreator');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                grid = data.grid;
+                startDate = new Date(data.startDate);
+                todoList = new Map(data.todoList);
+                colorPalette = data.colorPalette;
+                darkColorPalette = data.darkColorPalette;
+                renderGrid();
+                renderMonths();
+                renderTodoList();
+                updateStats();
+                renderAchievements();
+                renderColorPalette();
+                if (heatmapChart) {
+                    updateHeatmap();
+                }
+                alert('Data loaded successfully!');
+            } else {
+                alert('No saved data found.');
+            }
+        }
+
+        function showSharePopup() {
+            const gridData = grid.flat().join('');
+            const shareUrl = `${window.location.origin}${window.location.pathname}?grid=${gridData}&start=${startDate.toISOString()}`;
+            shareUrlInput.value = shareUrl;
+            sharePopup.style.display = 'block';
+        }
+
+        function hideSharePopup() {
+            sharePopup.style.display = 'none';
+        }
+
+        function showReminderPopup() {
+            reminderPopup.style.display = 'block';
+        }
+
+        function hideReminderPopup() {
+            reminderPopup.style.display = 'none';
+        }
+
+        function addReminder() {
+            const date = document.getElementById('reminderDate').value;
+            const text = document.getElementById('reminderText').value;
+            if (date && text) {
+                reminders.push({ date, text });
+                renderReminders();
+                hideReminderPopup();
+            } else {
+                alert('Please fill in both date and reminder text.');
+            }
+        }
+
+        function renderReminders() {
+            remindersContainer.innerHTML = '';
+            reminders.forEach((reminder, index) => {
+                const reminderElement = document.createElement('div');
+                reminderElement.className = 'reminder-item';
+                reminderElement.innerHTML = `
+                    <span>${reminder.date}: ${reminder.text}</span>
+                    <button onclick="removeReminder(${index})">Remove</button>
+                `;
+                remindersContainer.appendChild(reminderElement);
+            });
+        }
+
+        function removeReminder(index) {
+            reminders.splice(index, 1);
+            renderReminders();
+        }
+
+        function applyPattern(pattern) {
+            const startRow = Math.floor((7 - pattern.length) / 2);
+            const startCol = Math.floor((53 - pattern[0].length) / 2);
+            
+            pattern.forEach((row, i) => {
+                row.forEach((cell, j) => {
+                    if (startRow + i < 7 && startCol + j < 53) {
+                        grid[startRow + i][startCol + j] = cell ? 4 : 0;
+                    }
+                });
+            });
+            
+            renderGrid();
+            updateStats();
+            renderAchievements();
+            if (heatmapChart) {
+                updateHeatmap();
+            }
+        }
+
+        
 
         darkModeToggle.addEventListener('change', () => {
             darkMode = darkModeToggle.checked;
@@ -244,6 +1142,9 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
             document.querySelectorAll('.legend-item').forEach((item, index) => {
                 item.style.backgroundColor = getColor(index);
             });
+            if (heatmapChart) {
+                updateHeatmap();
+            }
         });
 
         prevYearBtn.addEventListener('click', () => {
@@ -263,34 +1164,203 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
         });
 
         randomizeBtn.addEventListener('click', () => {
-            grid = grid.map(row => row.map(() => Math.floor(Math.random() * LEVELS)));
-            renderGrid();
-            todoList.clear();
-            grid.forEach((row, i) => {
-                row.forEach((cell, j) => {
-                    if (cell > 0) {
-                        updateTodoList(i, j, 0, cell);
-                    }
+            randomizeBtn.classList.add('loading');
+            setTimeout(() => {
+                grid = grid.map(row => row.map(() => Math.floor(Math.random() * LEVELS)));
+                renderGrid();
+                todoList.clear();
+                grid.forEach((row, i) => {
+                    row.forEach((cell, j) => {
+                        if (cell > 0) {
+                            updateTodoList(i, j, 0, cell);
+                        }
+                    });
                 });
-            });
-            updateStats();
+                updateStats();
+                renderAchievements();
+                if (heatmapChart) {
+                    updateHeatmap();
+                }
+                randomizeBtn.classList.remove('loading');
+            }, 1000);
         });
+
+
+
+
+
+
+// Implement timelapse functionality
+let timelapseInterval;
+let currentFrame = 0;
+const totalFrames = 53 * 7;
+
+function startTimelapse() {
+    stopTimelapse(); // Stop any existing timelapse
+
+    timelapseInterval = setInterval(() => {
+        const row = currentFrame % 7;
+        const col = Math.floor(currentFrame / 7);
+        
+        updateGrid(row, col, Math.floor(Math.random() * LEVELS));
+        
+        currentFrame++;
+        timelapseHandle.style.left = `${(currentFrame / totalFrames) * 100}%`;
+        
+        if (currentFrame >= totalFrames) {
+            stopTimelapse();
+        }
+    }, 50);
+}
+
+function stopTimelapse() {
+    clearInterval(timelapseInterval);
+}
+
+function setTimelapsePosition(percentage) {
+    currentFrame = Math.floor(percentage * totalFrames);
+    timelapseHandle.style.left = `${percentage * 100}%`;
+    
+    // Update grid based on current frame
+    for (let i = 0; i < currentFrame; i++) {
+        const row = i % 7;
+        const col = Math.floor(i / 7);
+        grid[row][col] = Math.floor(Math.random() * LEVELS);
+    }
+    
+    renderGrid();
+    updateStats();
+    renderAchievements();
+    if (heatmapChart) {
+        updateHeatmap();
+    }
+}
+
+// Update event listeners for timelapse
+timelapse.addEventListener('click', (e) => {
+    const rect = timelapse.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = x / rect.width;
+    setTimelapsePosition(percentage);
+});
+
+timelapseHandle.addEventListener('mousedown', (e) => {
+    const move = (moveEvent) => {
+        const rect = timelapse.getBoundingClientRect();
+        let x = moveEvent.clientX - rect.left;
+        x = Math.max(0, Math.min(x, rect.width));
+        const percentage = x / rect.width;
+        setTimelapsePosition(percentage);
+    };
+    
+    const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+    };
+    
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+});
+
+// Add buttons to control timelapse
+const startTimelapseBtn = document.createElement('button');
+startTimelapseBtn.textContent = 'Start Timelapse';
+startTimelapseBtn.addEventListener('click', startTimelapse);
+
+const stopTimelapseBtn = document.createElement('button');
+stopTimelapseBtn.textContent = 'Stop Timelapse';
+stopTimelapseBtn.addEventListener('click', stopTimelapse);
+
+// Add these buttons to your controls div
+document.querySelector('.controls').appendChild(startTimelapseBtn);
+document.querySelector('.controls').appendChild(stopTimelapseBtn);
+
+
+
+
+
+
+
 
         syncGitHubBtn.addEventListener('click', () => {
-            alert('This feature would typically connect to the GitHub API to fetch real contribution data. For this demo, we\'ll simulate a sync with random data.');
-            randomizeBtn.click();
+            syncGitHubBtn.classList.add('loading');
+            setTimeout(() => {
+                alert('This feature would typically connect to the GitHub API to fetch real contribution data. For this demo, we\'ll simulate a sync with random data.');
+                randomizeBtn.click();
+                syncGitHubBtn.classList.remove('loading');
+            }, 2000);
         });
 
-        shareBtn.addEventListener('click', () => {
-            const gridData = grid.flat().join('');
-            const shareUrl = `${window.location.origin}${window.location.pathname}?grid=${gridData}&start=${startDate.toISOString()}`;
-            shareUrlInput.value = shareUrl;
-            alert('Share URL has been generated and copied to the input field below.');
+        shareBtn.addEventListener('click', showSharePopup);
+
+        printBtn.addEventListener('click', () => {
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write('<html><head><title>Todo List</title>');
+            printWindow.document.write('<style>body { font-family: Arial, sans-serif; } .todo-item { background-color: #f6f8fa; padding: 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); margin-bottom: 20px; }</style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write('<h1>Todo List</h1>');
+            todoList.forEach((item, date) => {
+                printWindow.document.write(`<div class="todo-item"><h3>${new Date(date).toDateString()}</h3><p>${item.suggestion}</p></div>`);
+            });
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.print();
         });
 
-        goalInput.addEventListener('change', (e) => {
-            contributionGoal = parseInt(e.target.value, 10);
-            updateProgressBar();
+        saveBtn.addEventListener('click', saveToLocalStorage);
+        loadBtn.addEventListener('click', loadFromLocalStorage);
+        reminderBtn.addEventListener('click', showReminderPopup);
+        addReminderBtn.addEventListener('click', addReminder);
+
+        textInput.addEventListener('input', updateTextOnGrid);
+
+        gridViewBtn.addEventListener('click', () => {
+            gridElement.style.display = 'grid';
+            heatmapContainer.style.display = 'none';
+        });
+
+        heatmapViewBtn.addEventListener('click', () => {
+            gridElement.style.display = 'none';
+            heatmapContainer.style.display = 'block';
+            if (!heatmapChart) {
+                createHeatmap();
+            } else {
+                updateHeatmap();
+            }
+        });
+
+        document.querySelectorAll('.close-popup').forEach(closeBtn => {
+            closeBtn.addEventListener('click', () => {
+                sharePopup.style.display = 'none';
+                reminderPopup.style.display = 'none';
+            });
+        });
+
+        timelapse.addEventListener('click', (e) => {
+            const rect = timelapse.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = x / rect.width;
+            timelapseHandle.style.left = `${percentage * 100}%`;
+            // You can use the percentage to update the grid state
+        });
+
+        timelapseHandle.addEventListener('mousedown', (e) => {
+            const move = (moveEvent) => {
+                const rect = timelapse.getBoundingClientRect();
+                let x = moveEvent.clientX - rect.left;
+                x = Math.max(0, Math.min(x, rect.width));
+                const percentage = x / rect.width;
+                timelapseHandle.style.left = `${percentage * 100}%`;
+                // You can use the percentage to update the grid state
+            };
+            
+            const up = () => {
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', up);
+            };
+            
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
         });
 
         document.addEventListener('mouseup', () => {
@@ -317,4 +1387,5 @@ const DAYS = ['Mon', 'Wed', 'Fri'];
             renderGrid();
             renderMonths();
             updateStats();
+            renderAchievements();
         }
