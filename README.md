@@ -81,7 +81,24 @@ We welcome contributions and collaborations! You can get involved by submitting 
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
 
----
 
-Feel free to modify this README as needed or let me know if you want to add more details!
+## Version 2
+
+Many new features have been added to this version of GitHub Streaker:
+
+- **Instead Remover**: Hold the `Ctrl` key and select a cell to remove the input in that cell.
+- **Timelapse**: An animated feature to view your calendar creation, allowing you to visualize how it looks.
+- **Compare Between Versions**: The first version (V1) has been retained, and you can view it through [/v1/index.html](https://abinbn.github.io/Github_Streaker/v1/index.html).
+- **Print It**: You can now print the To-Do list that you created.
+- **Save/Load**: Save your calendar to local storage and load the last saved one to continue your work.
+- **Remind Me**: A reminder button has been added (a lot of work is needed on this).
+- **Heatmap**: (Non-functional)
+- **Achievements**: Achievements have been included just for fun. 😅
+- **Type It**: You can now type anything (A-Z), (0-9), (!-/), and more.
+
+## Let Me Know
+
+If you find anything faulty or with bugs, please never hesitate to inform me. I left it as is because I can’t solve it for now. If you are an `expert`, please feel free to solve it and submit a pull request.
+
+അപ്പോൾ എല്ലാം പറഞ്ഞത് പോലെ `Happy Coding`!
 
